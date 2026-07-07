@@ -5,6 +5,17 @@ Use Codex from inside Claude Code for code reviews or to delegate tasks to Codex
 This plugin is for Claude Code users who want an easy way to start using Codex from the workflow
 they already have.
 
+## Fork notice
+
+This is a **modified fork** of [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) (Apache-2.0). Changes from upstream:
+
+- `codex-rescue` agent pinned to the `haiku` model
+- agent instructed to show a concise BEFORE/AFTER on any code change
+- prompts, skills, and commands trimmed (~30% fewer tokens per `/codex:rescue`)
+- marketplace renamed to `romacv-codex`
+
+Upstream `LICENSE` and `NOTICE` are retained. Pull upstream updates with `git fetch upstream && git merge upstream/main`.
+
 <video src="./docs/plugin-demo.webm" controls muted playsinline autoplay></video>
 
 ## What You Get
@@ -24,13 +35,13 @@ they already have.
 Add the marketplace in Claude Code:
 
 ```bash
-/plugin marketplace add openai/codex-plugin-cc
+/plugin marketplace add romacv/codex-plugin-cc
 ```
 
 Install the plugin:
 
 ```bash
-/plugin install codex@openai-codex
+/plugin install codex@romacv-codex
 ```
 
 Reload plugins:
