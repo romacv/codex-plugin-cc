@@ -1,0 +1,39 @@
+name: Sync upstream
+on:
+  schedule:
+    - cron: "0 6 * * 1"          # Mondays 06:00 UTC
+  workflow_dispatch: {}           # manual "Run workflow" button
+permissions:
+  contents: write
+  issues: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Merge upstream
+        id: m
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/openai/codex-plugin-cc.git
+          git fetch upstream main
+          if git merge --no-edit upstream/main; then
+            echo "state=clean" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "state=conflict" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push clean update
+        if: steps.m.outputs.state == 'clean'
+        run: git push origin HEAD:main
+      - name: File issue on conflict
+        if: steps.m.outputs.state == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            -t "Upstream sync: manual merge needed" \
+            -b "Upstream (openai/codex-plugin-cc) changed files this fork customizes; auto-merge hit conflicts. Resolve locally: cd the fork, \`git fetch upstream && git merge upstream/main\`, keep haiku / romacv-codex name / trims, then \`git push\`."
