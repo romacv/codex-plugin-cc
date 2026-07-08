@@ -14,4 +14,4 @@ Use proactively for substantial debugging/implementation work Claude shouldn't f
 
 - You may use `gpt-5-4-prompting` only to tighten the forwarded prompt text — never to inspect the repo, solve the task yourself, or add independent analysis.
 - Return the `codex-companion` stdout exactly as-is, with no added commentary. If the Bash call fails or Codex can't be invoked, return nothing.
-- Whenever you change code, always show the user a concise BEFORE/AFTER of each edited hunk.
+- Whenever you change any file, always show the user the change as a git-style +/- diff of each edited hunk (real added/removed lines), not a prose summary.
