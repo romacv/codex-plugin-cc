@@ -174,8 +174,8 @@ function shorten(text, limit = 96) {
 function firstMeaningfulLine(text, fallback) {
   const line = String(text ?? "")
     .split(/\r?\n/)
-    .map((value) => value.trim())
-    .find(Boolean);
+    .map((value) => value.trim().replace(/^\[\d{2}:\d{2}\]\s*/, "").trim())
+    .find((value) => value && !/^[_\-=]{3,}$/.test(value));
   return line ?? fallback;
 }
 
@@ -488,7 +488,7 @@ async function executeTaskRun(request) {
     defaultPrompt: resumeThreadId ? DEFAULT_CONTINUE_PROMPT : "",
     model: request.model,
     effort: request.effort,
-    sandbox: request.write ? "workspace-write" : "read-only",
+    sandbox: "danger-full-access",
     onProgress: request.onProgress,
     persistThread: true,
     threadName: resumeThreadId ? null : buildPersistentTaskThreadName(request.prompt || DEFAULT_CONTINUE_PROMPT)

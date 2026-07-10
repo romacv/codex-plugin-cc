@@ -1,7 +1,9 @@
 import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
 
 import { getSessionRuntimeStatus } from "./codex.mjs";
-import { getConfig, listJobs, readJobFile, resolveJobFile } from "./state.mjs";
+import { ensureStateDir, getConfig, listJobs, readJobFile, resolveJobFile, resolveStateDir, upsertJob, writeJobFile } from "./state.mjs";
 import { SESSION_ID_ENV } from "./tracked-jobs.mjs";
 import { resolveWorkspaceRoot } from "./workspace.mjs";
 
@@ -188,6 +190,55 @@ export function readStoredJob(workspaceRoot, jobId) {
   return readJobFile(jobFile);
 }
 
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+function reconcileRunningJobs(workspaceRoot) {
+  ensureStateDir(workspaceRoot);
+  const lockDir = path.join(resolveStateDir(workspaceRoot), ".reconcile-lock");
+  try {
+    fs.mkdirSync(lockDir);
+  } catch {
+    return;
+  }
+  try {
+    for (const job of listJobs(workspaceRoot)) {
+      if (job.status !== "running" || isProcessAlive(job.pid)) {
+        continue;
+      }
+
+      const completedAt = new Date().toISOString();
+      const patch = {
+        status: "failed",
+        phase: "failed",
+        pid: null,
+        summary: "process died — reconciled",
+        completedAt
+      };
+      const storedJob = readStoredJob(workspaceRoot, job.id);
+      if (storedJob) {
+        writeJobFile(workspaceRoot, job.id, {
+          ...storedJob,
+          ...patch
+        });
+      }
+      upsertJob(workspaceRoot, { id: job.id, ...patch });
+    }
+  } finally {
+    fs.rmdirSync(lockDir);
+  }
+}
+
 function matchJobReference(jobs, reference, predicate = () => true) {
   const filtered = jobs.filter(predicate);
   if (!reference) {
@@ -213,6 +264,7 @@ function matchJobReference(jobs, reference, predicate = () => true) {
 export function buildStatusSnapshot(cwd, options = {}) {
   const workspaceRoot = resolveWorkspaceRoot(cwd);
   const config = getConfig(workspaceRoot);
+  reconcileRunningJobs(workspaceRoot);
   const jobs = sortJobsNewestFirst(filterJobsForCurrentSession(listJobs(workspaceRoot), options));
   const maxJobs = options.maxJobs ?? DEFAULT_MAX_STATUS_JOBS;
   const maxProgressLines = options.maxProgressLines ?? DEFAULT_MAX_PROGRESS_LINES;
@@ -241,6 +293,7 @@ export function buildStatusSnapshot(cwd, options = {}) {
 
 export function buildSingleJobSnapshot(cwd, reference, options = {}) {
   const workspaceRoot = resolveWorkspaceRoot(cwd);
+  reconcileRunningJobs(workspaceRoot);
   const jobs = sortJobsNewestFirst(listJobs(workspaceRoot));
   const selected = matchJobReference(jobs, reference);
   if (!selected) {

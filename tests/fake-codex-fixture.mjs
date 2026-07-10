@@ -233,6 +233,10 @@ function structuredReviewPayload(prompt) {
 }
 
 function taskPayload(prompt, resume) {
+  if (BEHAVIOR === "timestamped-task") {
+    return "_________\\n\\n[07:14] Handled the requested task.\\nTask prompt accepted.";
+  }
+
   if (prompt.includes("<task>") && prompt.includes("Only review the work from the previous Claude turn.")) {
     if (BEHAVIOR === "adversarial-clean") {
       return "ALLOW: No blocking issues found in the previous turn.";

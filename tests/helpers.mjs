@@ -4,6 +4,17 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 
+const pluginDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-plugin-test-data-"));
+process.env.CLAUDE_PLUGIN_DATA = pluginDataDir;
+const removePluginDataDir = () => fs.rmSync(pluginDataDir, { recursive: true, force: true });
+process.once("exit", removePluginDataDir);
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    removePluginDataDir();
+    process.exit(130);
+  });
+}
+
 export function makeTempDir(prefix = "codex-plugin-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }

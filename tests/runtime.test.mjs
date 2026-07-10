@@ -716,6 +716,25 @@ test("write task output focuses on the Codex result without generic follow-up hi
   assert.equal(result.stdout, "Handled the requested task.\nTask prompt accepted.\n");
 });
 
+test("task summaries skip leading dividers and timestamps", () => {
+  const repo = makeTempDir();
+  const binDir = makeTempDir();
+  installFakeCodex(binDir, "timestamped-task");
+  initGitRepo(repo);
+  fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
+  run("git", ["add", "README.md"], { cwd: repo });
+  run("git", ["commit", "-m", "init"], { cwd: repo });
+
+  const result = run("node", [SCRIPT, "task", "summarize the work"], {
+    cwd: repo,
+    env: buildEnv(binDir)
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const state = JSON.parse(fs.readFileSync(path.join(resolveStateDir(repo), "state.json"), "utf8"));
+  assert.equal(state.jobs[0].summary, "Handled the requested task.");
+});
+
 test("task --resume acts like --resume-last without leaking the flag into the prompt", () => {
   const repo = makeTempDir();
   const binDir = makeTempDir();
@@ -1113,6 +1132,7 @@ test("status shows phases, hints, and the latest finished job", () => {
             phase: "reviewing",
             threadId: "thr_1",
             summary: "Review working tree diff",
+            pid: process.pid,
             logFile,
             createdAt: "2026-03-18T15:30:00.000Z",
             updatedAt: "2026-03-18T15:30:03.000Z"
@@ -1189,6 +1209,7 @@ test("status without a job id only shows jobs from the current Claude session", 
             sessionId: "sess-current",
             threadId: "thr_current",
             summary: "Current session review",
+            pid: process.pid,
             logFile: currentLog,
             createdAt: "2026-03-18T15:30:00.000Z",
             updatedAt: "2026-03-18T15:30:00.000Z"
@@ -1256,6 +1277,7 @@ test("status preserves adversarial review kind labels", () => {
             phase: "reviewing",
             threadId: "thr_adv_live",
             summary: "Adversarial review current changes",
+            pid: process.pid,
             logFile,
             createdAt: "2026-03-18T15:30:00.000Z",
             updatedAt: "2026-03-18T15:30:00.000Z"
@@ -1290,6 +1312,51 @@ test("status preserves adversarial review kind labels", () => {
   assert.match(result.stdout, /- review-adv \| completed \| adversarial-review \| Codex Adversarial Review/);
   assert.match(result.stdout, /Codex session ID: thr_adv_live/);
   assert.match(result.stdout, /Codex session ID: thr_adv_done/);
+});
+
+test("status reconciles a running job without a live pid", () => {
+  const workspace = makeTempDir();
+  const stateDir = resolveStateDir(workspace);
+  const jobsDir = path.join(stateDir, "jobs");
+  fs.mkdirSync(jobsDir, { recursive: true });
+
+  const logFile = path.join(jobsDir, "task-dead.log");
+  const jobFile = path.join(jobsDir, "task-dead.json");
+  fs.writeFileSync(logFile, "[2026-03-18T15:30:00.000Z] Starting Codex Task.\n", "utf8");
+  fs.writeFileSync(jobFile, JSON.stringify({ id: "task-dead", status: "running", logFile }, null, 2), "utf8");
+  fs.writeFileSync(
+    path.join(stateDir, "state.json"),
+    `${JSON.stringify(
+      {
+        version: 1,
+        config: { stopReviewGate: false },
+        jobs: [
+          {
+            id: "task-dead",
+            status: "running",
+            title: "Codex Task",
+            jobClass: "task",
+            summary: "Investigate flaky test",
+            pid: null,
+            logFile,
+            createdAt: "2026-03-18T15:30:00.000Z",
+            updatedAt: "2026-03-18T15:30:02.000Z"
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const result = run("node", [SCRIPT, "status", "task-dead", "--json"], { cwd: workspace });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).job.status, "failed");
+  const state = JSON.parse(fs.readFileSync(path.join(stateDir, "state.json"), "utf8"));
+  assert.equal(state.jobs[0].summary, "process died — reconciled");
+  assert.equal(JSON.parse(fs.readFileSync(jobFile, "utf8")).status, "failed");
 });
 
 test("status --wait times out cleanly when a job is still active", () => {
@@ -1328,6 +1395,7 @@ test("status --wait times out cleanly when a job is still active", () => {
             title: "Codex Task",
             jobClass: "task",
             summary: "Investigate flaky test",
+            pid: process.pid,
             logFile,
             createdAt: "2026-03-18T15:30:00.000Z",
             startedAt: "2026-03-18T15:30:01.000Z",
