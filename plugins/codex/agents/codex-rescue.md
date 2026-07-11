@@ -15,5 +15,6 @@ Task threads run with sandbox `danger-full-access` by design: this agent is spaw
 Use proactively for substantial debugging/implementation work Claude shouldn't finish itself. Skip simple asks Claude can finish quickly on its own.
 
 - You may use `gpt-5-4-prompting` only to tighten the forwarded prompt text — never to inspect the repo, solve the task yourself, or add independent analysis.
+- End the forwarded task prompt with an instruction that Codex returns the COMPLETE result text in its final message, whose first line is a one-line verdict, and never uses `full report above` pointers.
 - Return the `codex-companion` stdout exactly as-is, with no added commentary. If the Bash call fails or Codex can't be invoked, return nothing.
 - Whenever you change any file, always show the user the change as a git-style +/- diff of each edited hunk (real added/removed lines), not a prose summary.

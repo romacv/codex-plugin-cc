@@ -22,6 +22,7 @@ import {
     runAppServerTurn
   } from "./lib/codex.mjs";
 import { resolveClaudeSessionPath } from "./lib/claude-session-transfer.mjs";
+import { ensureCodexBudgetAvailable } from "./lib/codex-budget.mjs";
 import { readStdinIfPiped } from "./lib/fs.mjs";
 import { collectReviewContext, ensureGitRepository, resolveReviewTarget } from "./lib/git.mjs";
 import { binaryAvailable, terminateProcessTree } from "./lib/process.mjs";
@@ -727,6 +728,7 @@ async function handleReviewCommand(argv, config) {
   });
 
   config.validateRequest?.(target, focusText);
+  ensureCodexBudgetAvailable();
   const metadata = buildReviewJobMetadata(config.reviewName, target);
   const job = createCompanionJob({
     prefix: "review",
@@ -780,6 +782,10 @@ async function handleTask(argv) {
     throw new Error("Choose either --resume/--resume-last or --fresh.");
   }
   const write = Boolean(options.write);
+  if (options.background) {
+    requireTaskRequest(prompt, resumeLast);
+  }
+  ensureCodexBudgetAvailable();
   const taskMetadata = buildTaskRunMetadata({
     prompt,
     resumeLast
@@ -787,7 +793,6 @@ async function handleTask(argv) {
 
   if (options.background) {
     ensureCodexAvailable(cwd);
-    requireTaskRequest(prompt, resumeLast);
 
     const job = buildTaskJob(workspaceRoot, taskMetadata, write);
     const request = buildTaskRequest({

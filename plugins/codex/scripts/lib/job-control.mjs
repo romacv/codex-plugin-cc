@@ -3,8 +3,8 @@ import path from "node:path";
 import process from "node:process";
 
 import { getSessionRuntimeStatus } from "./codex.mjs";
-import { ensureStateDir, getConfig, listJobs, readJobFile, resolveJobFile, resolveStateDir, upsertJob, writeJobFile } from "./state.mjs";
-import { SESSION_ID_ENV } from "./tracked-jobs.mjs";
+import { ensureStateDir, getConfig, listJobs, readJobFile, resolveJobFile, resolveStateDir } from "./state.mjs";
+import { persistFailedJob, SESSION_ID_ENV } from "./tracked-jobs.mjs";
 import { resolveWorkspaceRoot } from "./workspace.mjs";
 
 export const DEFAULT_MAX_STATUS_JOBS = 8;
@@ -209,7 +209,15 @@ function reconcileRunningJobs(workspaceRoot) {
   try {
     fs.mkdirSync(lockDir);
   } catch {
-    return;
+    try {
+      if (Date.now() - fs.statSync(lockDir).mtimeMs < 120000) {
+        return;
+      }
+      fs.rmdirSync(lockDir);
+      fs.mkdirSync(lockDir);
+    } catch {
+      return;
+    }
   }
   try {
     for (const job of listJobs(workspaceRoot)) {
@@ -218,21 +226,10 @@ function reconcileRunningJobs(workspaceRoot) {
       }
 
       const completedAt = new Date().toISOString();
-      const patch = {
-        status: "failed",
-        phase: "failed",
-        pid: null,
+      persistFailedJob(workspaceRoot, job.id, {
         summary: "process died — reconciled",
         completedAt
-      };
-      const storedJob = readStoredJob(workspaceRoot, job.id);
-      if (storedJob) {
-        writeJobFile(workspaceRoot, job.id, {
-          ...storedJob,
-          ...patch
-        });
-      }
-      upsertJob(workspaceRoot, { id: job.id, ...patch });
+      });
     }
   } finally {
     fs.rmdirSync(lockDir);

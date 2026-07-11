@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { buildEnv, installFakeCodex } from "./fake-codex-fixture.mjs";
+import { installFakeCodexbar } from "./fake-codexbar-fixture.mjs";
 import { initGitRepo, makeTempDir, run } from "./helpers.mjs";
 import { loadBrokerSession, saveBrokerSession } from "../plugins/codex/scripts/lib/broker-lifecycle.mjs";
 import { resolveStateDir } from "../plugins/codex/scripts/lib/state.mjs";
@@ -185,6 +186,60 @@ test("task runs without auth preflight so Codex can refresh an expired session",
   run("git", ["commit", "-m", "init"], { cwd: repo });
 
   const result = run("node", [SCRIPT, "task", "check refreshable auth"], {
+    cwd: repo,
+    env: buildEnv(binDir)
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Handled the requested task/);
+});
+
+test("budget preflight blocks task and review dispatch before creating a job or thread", () => {
+  const repo = makeTempDir();
+  const binDir = makeTempDir();
+  installFakeCodex(binDir);
+  const { callsPath } = installFakeCodexbar(binDir);
+  initGitRepo(repo);
+  fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
+  run("git", ["add", "README.md"], { cwd: repo });
+  run("git", ["commit", "-m", "init"], { cwd: repo });
+  fs.writeFileSync(path.join(repo, "README.md"), "hello again\n");
+
+  for (const [args, usage] of [
+    [["task", "--background", "inspect the change"], { primary: { resetDescription: "4:30 PM", usedPercent: 100 } }],
+    [["review"], { rateLimited: true, resetDescription: "4:30 PM" }],
+    [["adversarial-review"], { primary: { resetDescription: "4:30 PM", usedPercent: 100 } }]
+  ]) {
+    installFakeCodexbar(binDir, [{ provider: "codex", usage }]);
+    const startedAt = Date.now();
+    const result = run("node", [SCRIPT, ...args], {
+      cwd: repo,
+      env: buildEnv(binDir)
+    });
+
+    assert.ok(Date.now() - startedAt < 5000);
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "Codex at limit — resets 4:30 PM; dispatch skipped\n");
+  }
+
+  assert.equal(fs.existsSync(path.join(binDir, "fake-codex-state.json")), false);
+  assert.equal(fs.existsSync(path.join(resolveStateDir(repo), "state.json")), false);
+  const calls = fs.readFileSync(callsPath, "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(calls, Array.from({ length: 3 }, () => ["usage", "--format", "json", "--provider", "codex"]));
+});
+
+test("budget preflight proceeds when codexbar output is malformed", () => {
+  const repo = makeTempDir();
+  const binDir = makeTempDir();
+  installFakeCodex(binDir);
+  installFakeCodexbar(binDir, "not-json");
+  initGitRepo(repo);
+  fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
+  run("git", ["add", "README.md"], { cwd: repo });
+  run("git", ["commit", "-m", "init"], { cwd: repo });
+
+  const result = run("node", [SCRIPT, "task", "check unknown budget"], {
     cwd: repo,
     env: buildEnv(binDir)
   });

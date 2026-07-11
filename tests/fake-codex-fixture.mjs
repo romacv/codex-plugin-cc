@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import { installFakeCodexbar } from "./fake-codexbar-fixture.mjs";
 import { writeExecutable } from "./helpers.mjs";
 
 export function installFakeCodex(binDir, behavior = "review-ok") {
+  installFakeCodexbar(binDir);
   const statePath = path.join(binDir, "fake-codex-state.json");
   const scriptPath = path.join(binDir, "codex");
   const source = `#!/usr/bin/env node
@@ -657,6 +659,7 @@ export function buildEnv(binDir) {
   const sep = process.platform === "win32" ? ";" : ":";
   return {
     ...process.env,
+    CODEX_COMPANION_TEST_CODEXBAR: path.join(binDir, "codexbar"),
     PATH: `${binDir}${sep}${process.env.PATH}`
   };
 }
