@@ -9,8 +9,7 @@ they already have.
 
 This is a **modified fork** of [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) (Apache-2.0). Changes from upstream:
 
-- `codex-rescue` agent pinned to the `haiku` model
-- agent instructed to show a concise BEFORE/AFTER on any code change
+- `/codex:rescue` forwards deterministically — the command calls the Codex `task` runtime directly, with no LLM subagent hop that could skip or self-answer
 - prompts, skills, and commands trimmed (~30% fewer tokens per `/codex:rescue`)
 - marketplace renamed to `romacv-codex`
 
@@ -23,6 +22,8 @@ Upstream `LICENSE` and `NOTICE` are retained. Pull upstream updates with `git fe
 - `/codex:review` for a normal read-only Codex review
 - `/codex:adversarial-review` for a steerable challenge review
 - `/codex:rescue`, `/codex:transfer`, `/codex:status`, `/codex:result`, and `/codex:cancel` to delegate work, hand off sessions, and manage background jobs
+
+All commands run the shared Codex companion runtime deterministically — no LLM subagent decides whether to forward your request.
 
 ## Requirements
 
@@ -70,10 +71,7 @@ If Codex is installed but not logged in yet, run:
 !codex login
 ```
 
-After install, you should see:
-
-- the slash commands listed below
-- the `codex:codex-rescue` subagent in `/agents`
+After install, you should see the slash commands listed below.
 
 One simple first run is:
 
@@ -136,7 +134,7 @@ This command is read-only. It does not fix code.
 
 ### `/codex:rescue`
 
-Hands a task to Codex through the `codex:codex-rescue` subagent.
+Hands a task to Codex through the shared companion runtime. The command forwards deterministically — every invocation reaches Codex, with no subagent judgment call on whether to bother.
 
 Use it when you want Codex to:
 

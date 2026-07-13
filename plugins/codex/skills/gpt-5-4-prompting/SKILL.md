@@ -6,7 +6,7 @@ user-invocable: false
 
 # GPT-5.4 Prompting
 
-Use this skill when `codex:codex-rescue` needs to ask Codex or another GPT-5.4-based workflow for help.
+Use this skill when composing a Codex `task` prompt for `/codex:rescue`, or another GPT-5.4-based workflow, for help.
 
 Prompt Codex like an operator, not a collaborator: compact, block-structured, XML-tagged. State the task, the output contract, the follow-through defaults, and only the extra constraints that matter.
 
